@@ -5,10 +5,9 @@ import xml.sax
 
 import requests
 
-logging.basicConfig(
-    format='[%(asctime)s] [%(process)d] [%(name)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S +0000', level=logging.DEBUG
-    )
+logging.basicConfig(format='[%(asctime)s] [%(process)d] [%(name)s] '
+                           '[%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S +0000', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 _REQUIRED_OPTS = ['WATCHES_URL', 'EVECENTRAL_URL', 'SYSTEM_ID', 'PRICES_URL']
@@ -20,6 +19,7 @@ def system_id():
 
 class EveCentralMarketStatHandler(xml.sax.ContentHandler):
     def __init__(self):
+        xml.sax.ContentHandler.__init__(self)
         # Initialize the flag to false
         self.mode = None
         self.capturing = None
@@ -54,21 +54,21 @@ def verify_parameters():
         exit(1)
 
 
-def watched_ids():
+def watched_ids(http):
     try:
         wurl = os.environ.get('WATCHES_URL')
-        w = requests.get(url=wurl)
+        w = http.get(url=wurl)
     except Exception as e:
         logger.exception(e)
         exit(1)
     return [watched['id'] for watched in w.json()]
 
 
-def record_price(by_id, payload):
+def record_price(by_id, payload, http):
     try:
         purl = '/'.join([os.environ.get('PRICES_URL'), str(by_id)])
         logger.info('recording price')
-        requests.post(url=purl, json=payload)
+        http.post(url=purl, json=payload)
     except Exception as e:
         logger.exception(e)
         exit(1)
@@ -89,12 +89,12 @@ def translate(content):
     return payload
 
 
-def fetch_price(by_id):
+def fetch_price(by_id, http):
     try:
         params = {'typeid': by_id, 'usesystem': system_id()}
         ecurl = os.environ.get('EVECENTRAL_URL')
         logger.info('fetching price')
-        ec_body = requests.get(url=ecurl, params=params).content
+        ec_body = http.get(url=ecurl, params=params).content
     except Exception as e:
         logger.exception(e)
         exit(1)
@@ -103,12 +103,16 @@ def fetch_price(by_id):
 
 def main():
     verify_parameters()
+    headers = {'user-agent': 'github.com/eve-basil/checker[0.1.0-dev]'}
 
-    for by_id in watched_ids():
+    session = requests.Session()
+    session.headers.update(headers)
+
+    for by_id in watched_ids(session):
         logger.info('checking price for type_id %s', by_id)
-        ec_body = fetch_price(by_id)
+        ec_body = fetch_price(by_id, session)
         payload = translate(ec_body)
-        record_price(by_id, payload)
+        record_price(by_id, payload, session)
 
 if __name__ == "__main__":
     main()

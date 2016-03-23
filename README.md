@@ -22,4 +22,3 @@ This application is appropriate for periodic execution, e.g. with crontab
 40 20 * * * someuser source $HOME/.profile; python /path/to/checker.py >> $HOME/log/checker.log 2>&1
 
 ```
-
